@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284C7" />
+      <stop offset="50%" stop-color="#06B6D4" />
+      <stop offset="100%" stop-color="#10B981" />
+    </linearGradient>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+  </defs>
+  <!-- Background with squircle safe zone -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)"/>
+  <rect x="16" y="16" width="480" height="480" rx="112" stroke="rgba(255,255,255,0.08)" stroke-width="4"/>
+  
+  <!-- Modern Geometric W mark with code / globe intersection -->
+  <g transform="translate(64, 76)">
+    <!-- Globe orbit ring -->
+    <ellipse cx="192" cy="180" rx="170" ry="60" stroke="url(#brandGrad)" stroke-width="8" stroke-dasharray="16 12" opacity="0.4" transform="rotate(-18 192 180)" />
+    
+    <!-- Code bracket left -->
+    <path d="M72 130 L16 180 L72 230" stroke="#06B6D4" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
+    
+    <!-- Code bracket right -->
+    <path d="M312 130 L368 180 L312 230" stroke="#10B981" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Stylized W Studio emblem -->
+    <path d="M96 110 L144 260 L192 140 L240 260 L288 110" 
+          stroke="url(#brandGrad)" 
+          stroke-width="26" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" />
+  </g>
+</svg>

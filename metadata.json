@@ -1,0 +1,6 @@
+{
+  "name": "Webstudios Mobile - Website & Project Booking",
+  "description": "Android mobile application for webstudios.world to book custom-coded websites, schedule technical scoping consultations, explore sector packages, and track builds.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
