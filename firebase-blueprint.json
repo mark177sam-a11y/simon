@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "Booking": {
+      "title": "Booking",
+      "description": "Client website project and discovery consultation bookings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 256 },
+        "bookingType": { "type": "string", "enum": ["discovery", "scoping", "kickoff", "audit"] },
+        "sectorId": { "type": "string", "maxLength": 64 },
+        "clientName": { "type": "string", "maxLength": 128 },
+        "clientEmail": { "type": "string", "maxLength": 128 },
+        "clientPhone": { "type": "string", "maxLength": 64 },
+        "clientCompany": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 32 },
+        "timeSlot": { "type": "string", "maxLength": 64 },
+        "durationMinutes": { "type": "number" },
+        "meetingFormat": { "type": "string", "enum": ["google-meet", "whatsapp-call", "phone-call"] },
+        "meetUrl": { "type": "string", "maxLength": 256 },
+        "estimatedCostKSh": { "type": "number" },
+        "estimatedCostUSD": { "type": "number" },
+        "currency": { "type": "string", "enum": ["KSH", "USD"] },
+        "addons": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "notes": { "type": "string", "maxLength": 1024 },
+        "status": { "type": "string", "enum": ["confirmed", "in-progress", "completed", "cancelled"] },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "qrCodeToken": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "title", "bookingType", "clientName", "clientEmail", "date", "timeSlot", "status"]
+    }
+  },
+  "firestore": {
+    "/bookings/{bookingId}": {
+      "schema": "#/entities/Booking",
+      "description": "Collection of client website and discovery consultation bookings"
+    }
+  }
+}

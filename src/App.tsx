@@ -11,6 +11,7 @@ import { DigitalPassModal } from './components/DigitalPassModal';
 import { SectorDetailModal } from './components/SectorDetailModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { subscribeBookings, saveBooking, deleteBooking } from './lib/firebase.ts';
 import { INITIAL_BOOKINGS, SECTORS } from './data/mockData';
 import { BookingRecord, SectorItem, SectorId } from './types';
 import { CalendarPlus } from 'lucide-react';
@@ -46,7 +47,28 @@ export default function App() {
     return INITIAL_BOOKINGS;
   });
 
-  // Save bookings to localStorage
+  // Real-time Firestore sync
+  useEffect(() => {
+    const unsubscribe = subscribeBookings(
+      (cloudBookings) => {
+        if (cloudBookings && cloudBookings.length > 0) {
+          setBookings(cloudBookings);
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudBookings));
+          } catch {
+            // ignore
+          }
+        }
+      },
+      (error) => {
+        console.warn('Real-time database offline, using local storage:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // Save bookings to localStorage as local cache
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(bookings));
@@ -86,23 +108,40 @@ export default function App() {
   const [viewingPass, setViewingPass] = useState<BookingRecord | null>(null);
   const [viewingSector, setViewingSector] = useState<SectorItem | null>(null);
 
-  // Booking handlers
-  const handleBookingCreated = (newBooking: BookingRecord) => {
+  // Booking handlers with Cloud Persistence
+  const handleBookingCreated = async (newBooking: BookingRecord) => {
     setBookings((prev) => [newBooking, ...prev]);
+    try {
+      await saveBooking(newBooking);
+    } catch (e) {
+      console.warn('Cloud save deferred to local storage:', e);
+    }
   };
 
-  const handleCancelBooking = (bookingId: string) => {
+  const handleCancelBooking = async (bookingId: string) => {
     triggerHaptic();
     setBookings((prev) => prev.filter((b) => b.id !== bookingId));
+    try {
+      await deleteBooking(bookingId);
+    } catch (e) {
+      console.warn('Cloud delete deferred to local storage:', e);
+    }
   };
 
-  const handleRescheduleBooking = (bookingId: string, newDate: string, newTime: string) => {
+  const handleRescheduleBooking = async (bookingId: string, newDate: string, newTime: string) => {
     triggerHaptic();
-    setBookings((prev) =>
-      prev.map((b) =>
-        b.id === bookingId ? { ...b, date: newDate, timeSlot: newTime } : b
-      )
-    );
+    const updated = bookings.find((b) => b.id === bookingId);
+    if (updated) {
+      const newRecord = { ...updated, date: newDate, timeSlot: newTime };
+      setBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? newRecord : b))
+      );
+      try {
+        await saveBooking(newRecord);
+      } catch (e) {
+        console.warn('Cloud update deferred to local storage:', e);
+      }
+    }
   };
 
   // Open booking sheet for a specific sector
