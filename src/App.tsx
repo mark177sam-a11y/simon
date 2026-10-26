@@ -17,6 +17,10 @@ import { BookingRecord, SectorItem, SectorId } from './types';
 import { CalendarPlus } from 'lucide-react';
 import { triggerHaptic } from './utils/calendar';
 
+import { BookingManagerModal } from './components/BookingManagerModal';
+import { SectorDemoModal } from './components/SectorDemoModal';
+import { MpesaModal } from './components/MpesaModal';
+
 const STORAGE_KEY = 'webstudios_mobile_bookings_v1';
 const THEME_KEY = 'webstudios_android_theme_v1';
 const CURRENCY_KEY = 'webstudios_currency_v1';
@@ -104,9 +108,17 @@ export default function App() {
 
   // Modals state
   const [isBookingSheetOpen, setIsBookingSheetOpen] = useState<boolean>(false);
+  const [isManagerOpen, setIsManagerOpen] = useState<boolean>(false);
   const [preselectedSectorId, setPreselectedSectorId] = useState<SectorId | undefined>(undefined);
   const [viewingPass, setViewingPass] = useState<BookingRecord | null>(null);
   const [viewingSector, setViewingSector] = useState<SectorItem | null>(null);
+  const [demoSector, setDemoSector] = useState<SectorItem | null>(null);
+  const [mpesaPayment, setMpesaPayment] = useState<{ isOpen: boolean; phone: string; amountKSh: number; bookingRef: string }>({
+    isOpen: false,
+    phone: '',
+    amountKSh: 0,
+    bookingRef: ''
+  });
 
   // Booking handlers with Cloud Persistence
   const handleBookingCreated = async (newBooking: BookingRecord) => {
@@ -140,6 +152,22 @@ export default function App() {
         await saveBooking(newRecord);
       } catch (e) {
         console.warn('Cloud update deferred to local storage:', e);
+      }
+    }
+  };
+
+  const handleUpdateStatus = async (bookingId: string, status: BookingRecord['status']) => {
+    triggerHaptic();
+    const updated = bookings.find((b) => b.id === bookingId);
+    if (updated) {
+      const newRecord = { ...updated, status };
+      setBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? newRecord : b))
+      );
+      try {
+        await saveBooking(newRecord);
+      } catch (e) {
+        console.warn('Cloud status update deferred to local storage:', e);
       }
     }
   };
@@ -190,6 +218,10 @@ export default function App() {
               setViewingSector(sector);
             }}
             onBookSector={handleBookSector}
+            onOpenDemo={(sector) => {
+              triggerHaptic();
+              setDemoSector(sector);
+            }}
             currency={currency}
             searchQuery={searchQuery}
             activeTheme={activeTheme}
@@ -237,6 +269,10 @@ export default function App() {
             onOpenNewBooking={() => {
               triggerHaptic();
               setIsBookingSheetOpen(true);
+            }}
+            onOpenManager={() => {
+              triggerHaptic();
+              setIsManagerOpen(true);
             }}
             currency={currency}
           />
@@ -292,6 +328,37 @@ export default function App() {
         onClose={() => setViewingSector(null)}
         onBookThisSector={handleBookSector}
         currency={currency}
+      />
+
+      <BookingManagerModal
+        isOpen={isManagerOpen}
+        onClose={() => setIsManagerOpen(false)}
+        bookings={bookings}
+        onUpdateStatus={handleUpdateStatus}
+        onDeleteBooking={handleCancelBooking}
+        currency={currency}
+      />
+
+      <SectorDemoModal
+        sector={demoSector}
+        onClose={() => setDemoSector(null)}
+        onBookThisSector={handleBookSector}
+        currency={currency}
+      />
+
+      <MpesaModal
+        isOpen={mpesaPayment.isOpen}
+        onClose={() => setMpesaPayment((prev) => ({ ...prev, isOpen: false }))}
+        phone={mpesaPayment.phone}
+        amountKSh={mpesaPayment.amountKSh}
+        bookingRef={mpesaPayment.bookingRef}
+        onPaymentSuccess={async (receipt) => {
+          const matched = bookings.find((b) => b.id === mpesaPayment.bookingRef);
+          if (matched) {
+            const updated = { ...matched, notes: `${matched.notes || ''} [M-Pesa Paid Ref: ${receipt}]` };
+            await saveBooking(updated);
+          }
+        }}
       />
     </AndroidFrame>
   );

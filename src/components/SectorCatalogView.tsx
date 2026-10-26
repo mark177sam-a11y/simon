@@ -20,9 +20,12 @@ import { SECTORS } from '../data/mockData';
 import { triggerHaptic } from '../utils/calendar';
 import { AndroidTheme } from './AndroidFrame';
 
+import { Play } from 'lucide-react';
+
 interface SectorCatalogViewProps {
   onSelectSector: (sector: SectorItem) => void;
   onBookSector: (sector: SectorItem) => void;
+  onOpenDemo: (sector: SectorItem) => void;
   currency: 'KSH' | 'USD';
   searchQuery: string;
   activeTheme: AndroidTheme;
@@ -31,6 +34,7 @@ interface SectorCatalogViewProps {
 export const SectorCatalogView: React.FC<SectorCatalogViewProps> = ({
   onSelectSector,
   onBookSector,
+  onOpenDemo,
   currency,
   searchQuery,
   activeTheme
@@ -185,16 +189,28 @@ export const SectorCatalogView: React.FC<SectorCatalogViewProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex items-center gap-1.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic();
+                    onOpenDemo(sector);
+                  }}
+                  className="px-3 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-xs font-semibold text-cyan-400 border border-slate-800 flex items-center gap-1"
+                  title="Interactive System Preview"
+                >
+                  <Play className="w-3 h-3 fill-cyan-400" />
+                  <span>Demo</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => {
                     triggerHaptic();
                     onSelectSector(sector);
                   }}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition-colors"
+                  className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition-colors"
                 >
-                  Specifications
+                  Specs
                 </button>
                 <button
                   type="button"
@@ -202,9 +218,9 @@ export const SectorCatalogView: React.FC<SectorCatalogViewProps> = ({
                     triggerHaptic();
                     onBookSector(sector);
                   }}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-cyan-950/40 active:scale-95 transition-transform"
+                  className="flex-1 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-1 shadow-md shadow-cyan-950/40 active:scale-95 transition-transform"
                 >
-                  <span>Book Project</span>
+                  <span>Book</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>

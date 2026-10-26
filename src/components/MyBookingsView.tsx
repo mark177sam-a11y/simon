@@ -15,10 +15,13 @@ import {
 import { BookingRecord } from '../types';
 import { downloadICS, getGoogleCalendarUrl, triggerHaptic } from '../utils/calendar';
 
+import { Database } from 'lucide-react';
+
 interface MyBookingsViewProps {
   bookings: BookingRecord[];
   onOpenPass: (booking: BookingRecord) => void;
   onOpenNewBooking: () => void;
+  onOpenManager: () => void;
   currency: 'KSH' | 'USD';
 }
 
@@ -26,6 +29,7 @@ export const MyBookingsView: React.FC<MyBookingsViewProps> = ({
   bookings,
   onOpenPass,
   onOpenNewBooking,
+  onOpenManager,
   currency
 }) => {
   const [filter, setFilter] = useState<'all' | 'confirmed' | 'completed'>('all');
@@ -40,21 +44,38 @@ export const MyBookingsView: React.FC<MyBookingsViewProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-bold text-white">My Booking Passes</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-white">Booking Passes</h2>
+            <span className="text-[9px] font-mono font-bold bg-cyan-950 border border-cyan-800 text-cyan-400 px-1.5 py-0.2 rounded-full">
+              Cloud Live
+            </span>
+          </div>
           <p className="text-xs text-slate-400">
-            {bookings.length} verified project sessions & discovery slots
+            {bookings.length} verified records in Firestore database
           </p>
         </div>
-        <button
-          onClick={() => {
-            triggerHaptic();
-            onOpenNewBooking();
-          }}
-          className="px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md shadow-cyan-950/40"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span>New Booking</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              triggerHaptic();
+              onOpenManager();
+            }}
+            className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-cyan-400"
+            title="Open Cloud Bookings Database Manager"
+          >
+            <Database className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => {
+              triggerHaptic();
+              onOpenNewBooking();
+            }}
+            className="px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-1 shadow-md shadow-cyan-950/40"
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>Book</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter Tabs */}

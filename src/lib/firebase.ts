@@ -14,11 +14,25 @@ import firebaseConfig from '../../firebase-applet-config.json';
 import { BookingRecord } from '../types';
 import { INITIAL_BOOKINGS } from '../data/mockData';
 
+import { getDocFromServer } from 'firebase/firestore';
+
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
 // CRITICAL: Initialize Firestore with specific databaseId as specified in firebase-applet-config
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Validate connection to Firestore on boot as required by skill guidelines
+export async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration.");
+    }
+  }
+}
+testConnection();
 
 export enum OperationType {
   CREATE = 'create',
