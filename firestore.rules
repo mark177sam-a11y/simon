@@ -21,6 +21,10 @@ service cloud.firestore {
         && data.status in ['confirmed', 'in-progress', 'completed', 'cancelled'];
     }
 
+    match /test/{docId} {
+      allow read: if true;
+    }
+
     match /bookings/{bookingId} {
       allow read: if isValidId(bookingId);
       allow create: if isValidId(bookingId) && isValidBooking(request.resource.data);
