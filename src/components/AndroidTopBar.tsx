@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Bell, MessageSquare, Globe2, X, Check, ArrowRight } from 'lucide-react';
+import { Search, Bell, X, Check, ArrowRight, Database } from 'lucide-react';
 import { AndroidTheme } from './AndroidFrame';
 
 interface AndroidTopBarProps {
@@ -10,6 +10,8 @@ interface AndroidTopBarProps {
   bookingCount: number;
   onOpenMyBookings: () => void;
   activeTheme: AndroidTheme;
+  isSupabaseConnected: boolean;
+  onOpenSupabase: () => void;
 }
 
 export const AndroidTopBar: React.FC<AndroidTopBarProps> = ({
@@ -19,7 +21,9 @@ export const AndroidTopBar: React.FC<AndroidTopBarProps> = ({
   onSearchChange,
   bookingCount,
   onOpenMyBookings,
-  activeTheme
+  activeTheme,
+  isSupabaseConnected,
+  onOpenSupabase
 }) => {
   const [isSearching, setIsSearching] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -34,13 +38,13 @@ export const AndroidTopBar: React.FC<AndroidTopBarProps> = ({
 
   return (
     <>
-      <header className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-900 px-4 py-2.5">
+      <header className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur-md border-b border-slate-900 px-4 py-2.5">
         {!isSearching ? (
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-2">
             {/* Left: Brand Identity */}
             <div className="flex items-center gap-2.5 min-w-0">
               <div 
-                className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-sm text-slate-950 shadow-sm"
+                className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-sm text-slate-950 shadow-sm shrink-0"
                 style={{ backgroundColor: themeAccentHex[activeTheme] }}
               >
                 W
@@ -54,8 +58,22 @@ export const AndroidTopBar: React.FC<AndroidTopBarProps> = ({
               </div>
             </div>
 
-            {/* Right: Currency Toggle, Search & Notifications */}
+            {/* Right: Supabase, Currency Toggle, Search & Notifications */}
             <div className="flex items-center gap-1.5 shrink-0">
+              {/* Supabase Connection Button */}
+              <button
+                onClick={onOpenSupabase}
+                className={`px-2 py-1 rounded-lg border text-[11px] font-mono flex items-center gap-1.5 transition-colors ${
+                  isSupabaseConnected
+                    ? 'bg-emerald-950/60 border-emerald-800/80 text-emerald-400 hover:bg-emerald-900/60'
+                    : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
+                }`}
+                title={isSupabaseConnected ? 'Supabase Connected (Click to manage)' : 'Connect Supabase for Bookings'}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${isSupabaseConnected ? 'bg-emerald-400 animate-pulse' : 'bg-emerald-400/80'}`} />
+                <span className="font-semibold">Supabase</span>
+              </button>
+
               {/* Currency Selector */}
               <button
                 onClick={onCurrencyToggle}
@@ -154,7 +172,7 @@ export const AndroidTopBar: React.FC<AndroidTopBarProps> = ({
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-slate-200">{bookingCount} Active Studio Booking{bookingCount > 1 ? 's' : ''}</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Your scheduled session{bookingCount > 1 ? 's are' : ' is'} synced with Firestore cloud database.
+                      Your scheduled session{bookingCount > 1 ? 's are' : ' is'} synchronized live with database storage.
                     </p>
                     <button
                       onClick={() => {
@@ -170,7 +188,7 @@ export const AndroidTopBar: React.FC<AndroidTopBarProps> = ({
                 </div>
               ) : (
                 <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800/80 text-xs text-slate-400 text-center">
-                  No pending alerts. Cloud database connected and synchronized.
+                  No pending alerts. Database connected and synchronized.
                 </div>
               )}
 

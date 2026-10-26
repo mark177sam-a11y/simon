@@ -4,16 +4,9 @@ import {
   Database, 
   Search, 
   Download, 
-  Filter, 
-  CheckCircle2, 
-  Clock, 
-  Calendar, 
   Mail, 
   Phone, 
-  Building,
-  RefreshCw,
-  Trash2,
-  ExternalLink
+  Trash2
 } from 'lucide-react';
 import { BookingRecord } from '../types';
 import { triggerHaptic } from '../utils/calendar';
@@ -25,6 +18,8 @@ interface BookingManagerModalProps {
   onUpdateStatus: (bookingId: string, status: BookingRecord['status']) => void;
   onDeleteBooking: (bookingId: string) => void;
   currency: 'KSH' | 'USD';
+  isSupabaseConnected: boolean;
+  onOpenSupabase: () => void;
 }
 
 export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({
@@ -33,7 +28,9 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({
   bookings,
   onUpdateStatus,
   onDeleteBooking,
-  currency
+  currency,
+  isSupabaseConnected,
+  onOpenSupabase
 }) => {
   if (!isOpen) return null;
 
@@ -115,9 +112,24 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({
               <Database className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">Cloud Bookings Manager</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white">Database Bookings Manager</h3>
+                <button
+                  onClick={() => {
+                    triggerHaptic();
+                    onOpenSupabase();
+                  }}
+                  className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border transition-colors ${
+                    isSupabaseConnected 
+                      ? 'bg-emerald-950/80 border-emerald-800 text-emerald-400'
+                      : 'bg-slate-800 border-slate-700 text-slate-300'
+                  }`}
+                >
+                  {isSupabaseConnected ? '⚡ Supabase Synced' : '+ Supabase'}
+                </button>
+              </div>
               <p className="text-[10px] text-slate-400 font-mono">
-                {bookings.length} Total Records Synced Live with Firestore
+                {bookings.length} Total Records Synced Across Cloud Database
               </p>
             </div>
           </div>
@@ -142,6 +154,16 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
               />
             </div>
+            <button
+              onClick={() => {
+                triggerHaptic();
+                onOpenSupabase();
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 text-xs font-mono font-bold flex items-center gap-1 shrink-0"
+              title="Open Supabase Project Configuration"
+            >
+              <span>⚡ Supabase</span>
+            </button>
             <button
               onClick={handleExportCSV}
               className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 shrink-0"
@@ -225,13 +247,13 @@ export const BookingManagerModal: React.FC<BookingManagerModalProps> = ({
 
                   <button
                     onClick={() => {
-                      if (confirm(`Delete booking record ${b.id} from cloud database?`)) {
+                      if (confirm(`Delete booking record ${b.id} from database?`)) {
                         triggerHaptic();
                         onDeleteBooking(b.id);
                       }
                     }}
                     className="p-1 rounded text-slate-500 hover:text-rose-400"
-                    title="Delete record from Firestore"
+                    title="Delete record from database"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

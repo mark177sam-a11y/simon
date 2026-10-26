@@ -12,7 +12,15 @@ import { SectorDetailModal } from './components/SectorDetailModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { subscribeBookings, saveBooking, deleteBooking } from './lib/firebase.ts';
-import { INITIAL_BOOKINGS, SECTORS } from './data/mockData';
+import { 
+  getSupabaseConfig, 
+  getSupabaseClient, 
+  saveBookingToSupabase, 
+  deleteBookingFromSupabase, 
+  fetchSupabaseBookings, 
+  subscribeSupabaseBookings 
+} from './lib/supabase';
+import { SupabaseModal } from './components/SupabaseModal';
 import { BookingRecord, SectorItem, SectorId } from './types';
 import { CalendarPlus } from 'lucide-react';
 import { triggerHaptic } from './utils/calendar';
@@ -36,7 +44,14 @@ export default function App() {
   // Search query in TopBar
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Bookings list state - Clean and connected directly to Firestore
+  // Supabase state
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(() => {
+    const cfg = getSupabaseConfig();
+    return Boolean(cfg.url && cfg.anonKey && cfg.enabled !== false);
+  });
+
+  // Bookings list state - Clean and connected directly to Firestore & Supabase
   const [bookings, setBookings] = useState<BookingRecord[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -44,6 +59,7 @@ export default function App() {
         try {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) {
+            // Strip out any legacy test dummy bookings
             return parsed.filter((b: BookingRecord) => b.id !== 'WS-BKG-84920' && b.id !== 'WS-BKG-91204');
           }
         } catch {
@@ -56,22 +72,82 @@ export default function App() {
 
   // Real-time Firestore sync
   useEffect(() => {
-    const unsubscribe = subscribeBookings(
+    const unsubscribeFirestore = subscribeBookings(
       (cloudBookings) => {
-        setBookings(cloudBookings);
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudBookings));
-        } catch {
-          // ignore
-        }
+        setBookings((prev) => {
+          // Merge avoiding duplicates
+          const map = new Map<string, BookingRecord>();
+          prev.forEach((b) => map.set(b.id, b));
+          cloudBookings.forEach((b) => map.set(b.id, b));
+          const merged = Array.from(map.values()).sort(
+            (a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime()
+          );
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          } catch {
+            // ignore
+          }
+          return merged;
+        });
       },
       (error) => {
-        console.warn('Real-time database offline, using local storage:', error);
+        console.warn('Real-time Firestore offline, using local storage:', error);
       }
     );
 
-    return () => unsubscribe();
+    return () => unsubscribeFirestore();
   }, []);
+
+  // Real-time Supabase sync (if configured)
+  useEffect(() => {
+    const config = getSupabaseConfig();
+    const hasConfig = Boolean(config.url && config.anonKey && config.enabled !== false);
+    setIsSupabaseConnected(hasConfig);
+
+    if (!hasConfig) return;
+
+    // Initial fetch from Supabase
+    fetchSupabaseBookings()
+      .then((supaBookings) => {
+        if (supaBookings.length > 0) {
+          setBookings((prev) => {
+            const map = new Map<string, BookingRecord>();
+            prev.forEach((b) => map.set(b.id, b));
+            supaBookings.forEach((b) => map.set(b.id, b));
+            const merged = Array.from(map.values()).sort(
+              (a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime()
+            );
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+            } catch {
+              // ignore
+            }
+            return merged;
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Initial Supabase fetch deferred:', err);
+      });
+
+    // Realtime channel listener
+    const unsubscribeSupabase = subscribeSupabaseBookings(() => {
+      fetchSupabaseBookings()
+        .then((fresh) => {
+          setBookings(fresh);
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+          } catch {
+            // ignore
+          }
+        })
+        .catch(() => {});
+    });
+
+    return () => {
+      if (unsubscribeSupabase) unsubscribeSupabase();
+    };
+  }, [isSupabaseConnected]);
 
   // Save bookings to localStorage as local cache
   useEffect(() => {
@@ -121,23 +197,41 @@ export default function App() {
     bookingRef: ''
   });
 
-  // Booking handlers with Cloud Persistence
+  // Booking handlers with persistent dual-sync (Supabase & Firestore)
   const handleBookingCreated = async (newBooking: BookingRecord) => {
     setBookings((prev) => [newBooking, ...prev]);
+
+    // Persist to Supabase if configured
+    if (getSupabaseClient()) {
+      saveBookingToSupabase(newBooking).catch((err) => {
+        console.warn('Supabase save deferred:', err);
+      });
+    }
+
+    // Persist to Firestore
     try {
       await saveBooking(newBooking);
     } catch (e) {
-      console.warn('Cloud save deferred to local storage:', e);
+      console.warn('Firestore save deferred to local storage:', e);
     }
   };
 
   const handleCancelBooking = async (bookingId: string) => {
     triggerHaptic();
     setBookings((prev) => prev.filter((b) => b.id !== bookingId));
+
+    // Delete from Supabase if configured
+    if (getSupabaseClient()) {
+      deleteBookingFromSupabase(bookingId).catch((err) => {
+        console.warn('Supabase delete deferred:', err);
+      });
+    }
+
+    // Delete from Firestore
     try {
       await deleteBooking(bookingId);
     } catch (e) {
-      console.warn('Cloud delete deferred to local storage:', e);
+      console.warn('Firestore delete deferred to local storage:', e);
     }
   };
 
@@ -149,10 +243,17 @@ export default function App() {
       setBookings((prev) =>
         prev.map((b) => (b.id === bookingId ? newRecord : b))
       );
+
+      if (getSupabaseClient()) {
+        saveBookingToSupabase(newRecord).catch((err) => {
+          console.warn('Supabase update deferred:', err);
+        });
+      }
+
       try {
         await saveBooking(newRecord);
       } catch (e) {
-        console.warn('Cloud update deferred to local storage:', e);
+        console.warn('Firestore update deferred to local storage:', e);
       }
     }
   };
@@ -165,10 +266,17 @@ export default function App() {
       setBookings((prev) =>
         prev.map((b) => (b.id === bookingId ? newRecord : b))
       );
+
+      if (getSupabaseClient()) {
+        saveBookingToSupabase(newRecord).catch((err) => {
+          console.warn('Supabase status update deferred:', err);
+        });
+      }
+
       try {
         await saveBooking(newRecord);
       } catch (e) {
-        console.warn('Cloud status update deferred to local storage:', e);
+        console.warn('Firestore status update deferred to local storage:', e);
       }
     }
   };
@@ -196,7 +304,7 @@ export default function App() {
     >
       <OfflineIndicator />
 
-      {/* Top Android App Bar */}
+      {/* Top Header App Bar with Supabase indicator */}
       <AndroidTopBar
         currency={currency}
         onCurrencyToggle={handleCurrencyToggle}
@@ -205,6 +313,8 @@ export default function App() {
         bookingCount={bookings.filter((b) => b.status === 'confirmed').length}
         onOpenMyBookings={() => setActiveTab('bookings')}
         activeTheme={activeTheme}
+        isSupabaseConnected={isSupabaseConnected}
+        onOpenSupabase={() => setIsSupabaseModalOpen(true)}
       />
 
       {/* In-App PWA Install Banner */}
@@ -276,6 +386,8 @@ export default function App() {
               setIsManagerOpen(true);
             }}
             currency={currency}
+            isSupabaseConnected={isSupabaseConnected}
+            onOpenSupabase={() => setIsSupabaseModalOpen(true)}
           />
         )}
 
@@ -338,6 +450,8 @@ export default function App() {
         onUpdateStatus={handleUpdateStatus}
         onDeleteBooking={handleCancelBooking}
         currency={currency}
+        isSupabaseConnected={isSupabaseConnected}
+        onOpenSupabase={() => setIsSupabaseModalOpen(true)}
       />
 
       <SectorDemoModal
@@ -345,6 +459,19 @@ export default function App() {
         onClose={() => setDemoSector(null)}
         onBookThisSector={handleBookSector}
         currency={currency}
+      />
+
+      <SupabaseModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => {
+          setIsSupabaseModalOpen(false);
+          const cfg = getSupabaseConfig();
+          setIsSupabaseConnected(Boolean(cfg.url && cfg.anonKey && cfg.enabled !== false));
+        }}
+        bookings={bookings}
+        onBookingsSynced={(syncedBookings) => {
+          setBookings(syncedBookings);
+        }}
       />
 
       <MpesaModal
@@ -358,6 +485,9 @@ export default function App() {
           if (matched) {
             const updated = { ...matched, notes: `${matched.notes || ''} [M-Pesa Paid Ref: ${receipt}]` };
             await saveBooking(updated);
+            if (getSupabaseClient()) {
+              saveBookingToSupabase(updated).catch(() => {});
+            }
           }
         }}
       />

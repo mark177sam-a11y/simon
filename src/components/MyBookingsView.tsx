@@ -4,18 +4,13 @@ import {
   Calendar as CalendarIcon, 
   Clock, 
   Download, 
-  ExternalLink, 
-  Video, 
-  Phone, 
   Plus, 
-  CheckCircle2, 
   QrCode,
-  ArrowRight
+  ArrowRight,
+  Database
 } from 'lucide-react';
 import { BookingRecord } from '../types';
-import { downloadICS, getGoogleCalendarUrl, triggerHaptic } from '../utils/calendar';
-
-import { Database } from 'lucide-react';
+import { downloadICS, triggerHaptic } from '../utils/calendar';
 
 interface MyBookingsViewProps {
   bookings: BookingRecord[];
@@ -23,6 +18,8 @@ interface MyBookingsViewProps {
   onOpenNewBooking: () => void;
   onOpenManager: () => void;
   currency: 'KSH' | 'USD';
+  isSupabaseConnected: boolean;
+  onOpenSupabase: () => void;
 }
 
 export const MyBookingsView: React.FC<MyBookingsViewProps> = ({
@@ -30,7 +27,9 @@ export const MyBookingsView: React.FC<MyBookingsViewProps> = ({
   onOpenPass,
   onOpenNewBooking,
   onOpenManager,
-  currency
+  currency,
+  isSupabaseConnected,
+  onOpenSupabase
 }) => {
   const [filter, setFilter] = useState<'all' | 'confirmed' | 'completed'>('all');
 
@@ -46,15 +45,37 @@ export const MyBookingsView: React.FC<MyBookingsViewProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold text-white">Booking Passes</h2>
-            <span className="text-[9px] font-mono font-bold bg-cyan-950 border border-cyan-800 text-cyan-400 px-1.5 py-0.2 rounded-full">
-              Cloud Live
-            </span>
+            <button
+              onClick={() => {
+                triggerHaptic();
+                onOpenSupabase();
+              }}
+              className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border transition-colors ${
+                isSupabaseConnected
+                  ? 'bg-emerald-950 border-emerald-800 text-emerald-400 hover:bg-emerald-900'
+                  : 'bg-cyan-950 border-cyan-800 text-cyan-400 hover:bg-cyan-900'
+              }`}
+              title="Click to view Supabase & Cloud DB connection"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${isSupabaseConnected ? 'bg-emerald-400' : 'bg-cyan-400'}`} />
+              <span>{isSupabaseConnected ? 'Supabase Synced' : 'Cloud DB Active'}</span>
+            </button>
           </div>
           <p className="text-xs text-slate-400">
-            {bookings.length} verified records in Firestore database
+            {bookings.length} verified bookings synchronized across database
           </p>
         </div>
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              triggerHaptic();
+              onOpenSupabase();
+            }}
+            className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-emerald-400 text-xs font-mono font-semibold flex items-center gap-1"
+            title="Configure Supabase Database"
+          >
+            <span>⚡ Supabase</span>
+          </button>
           <button
             onClick={() => {
               triggerHaptic();
