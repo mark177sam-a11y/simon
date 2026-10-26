@@ -21,7 +21,7 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({
   const tabs = [
     {
       id: 'sectors' as NavTabId,
-      label: 'Sectors',
+      label: 'Packages',
       icon: LayoutGrid,
     },
     {
@@ -37,13 +37,13 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({
     },
     {
       id: 'bookings' as NavTabId,
-      label: 'My Passes',
+      label: 'Bookings',
       icon: Ticket,
       badge: bookingCount
     },
     {
       id: 'contact' as NavTabId,
-      label: 'Studio',
+      label: 'Contact',
       icon: MessageCircle,
     },
   ];

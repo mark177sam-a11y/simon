@@ -5,7 +5,22 @@ import { Download, Share, X, CheckCircle2 } from 'lucide-react';
 export const PWAInstallBanner: React.FC = () => {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const [showIOSGuide, setShowIOSGuide] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('webstudios_pwa_dismissed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    try {
+      localStorage.setItem('webstudios_pwa_dismissed', 'true');
+    } catch {
+      // ignore
+    }
+  };
 
   if (isInstalled || dismissed) {
     return null;
@@ -32,7 +47,7 @@ export const PWAInstallBanner: React.FC = () => {
             Install
           </button>
           <button
-            onClick={() => setDismissed(true)}
+            onClick={handleDismiss}
             className="p-1.5 text-slate-400 hover:text-slate-200"
             aria-label="Dismiss banner"
           >
@@ -65,7 +80,7 @@ export const PWAInstallBanner: React.FC = () => {
               How-To
             </button>
             <button
-              onClick={() => setDismissed(true)}
+              onClick={handleDismiss}
               className="p-1 text-slate-500 hover:text-slate-300"
               aria-label="Dismiss"
             >

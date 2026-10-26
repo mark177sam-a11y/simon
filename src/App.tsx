@@ -36,32 +36,33 @@ export default function App() {
   // Search query in TopBar
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Bookings list state
+  // Bookings list state - Clean and connected directly to Firestore
   const [bookings, setBookings] = useState<BookingRecord[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            return parsed.filter((b: BookingRecord) => b.id !== 'WS-BKG-84920' && b.id !== 'WS-BKG-91204');
+          }
         } catch {
-          return INITIAL_BOOKINGS;
+          return [];
         }
       }
     }
-    return INITIAL_BOOKINGS;
+    return [];
   });
 
   // Real-time Firestore sync
   useEffect(() => {
     const unsubscribe = subscribeBookings(
       (cloudBookings) => {
-        if (cloudBookings && cloudBookings.length > 0) {
-          setBookings(cloudBookings);
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudBookings));
-          } catch {
-            // ignore
-          }
+        setBookings(cloudBookings);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudBookings));
+        } catch {
+          // ignore
         }
       },
       (error) => {

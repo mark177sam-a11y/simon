@@ -102,7 +102,7 @@ export const AndroidTopBar: React.FC<AndroidTopBarProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
-                placeholder="Search sectors, M-Pesa stores, clinics..."
+                placeholder="Search web packages, M-Pesa stores, redesigns..."
                 autoFocus
                 className="w-full bg-slate-900 border border-slate-700/80 rounded-xl pl-9 pr-8 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
               />
@@ -135,7 +135,7 @@ export const AndroidTopBar: React.FC<AndroidTopBarProps> = ({
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Bell className="w-4 h-4 text-cyan-400" />
-                <h3 className="text-sm font-bold text-white">System Notifications</h3>
+                <h3 className="text-sm font-bold text-white">Notifications</h3>
               </div>
               <button
                 onClick={() => setShowNotifications(false)}
@@ -146,27 +146,33 @@ export const AndroidTopBar: React.FC<AndroidTopBarProps> = ({
             </div>
 
             <div className="space-y-3">
-              <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800/80 flex items-start gap-2.5">
-                <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
-                  <Check className="w-3.5 h-3.5" />
+              {bookingCount > 0 ? (
+                <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800/80 flex items-start gap-2.5">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-slate-200">{bookingCount} Active Studio Booking{bookingCount > 1 ? 's' : ''}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Your scheduled session{bookingCount > 1 ? 's are' : ' is'} synced with Firestore cloud database.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setShowNotifications(false);
+                        onOpenMyBookings();
+                      }}
+                      className="mt-2 text-[11px] font-semibold text-cyan-400 flex items-center gap-1 hover:underline"
+                    >
+                      <span>View in Passes</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-200">2 Active Studio Bookings</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Your discovery and kickoff sessions are scheduled and verified with .ics calendar files.
-                  </p>
-                  <button
-                    onClick={() => {
-                      setShowNotifications(false);
-                      onOpenMyBookings();
-                    }}
-                    className="mt-2 text-[11px] font-semibold text-cyan-400 flex items-center gap-1 hover:underline"
-                  >
-                    <span>View in My Bookings</span>
-                    <ArrowRight className="w-3 h-3" />
-                  </button>
+              ) : (
+                <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800/80 text-xs text-slate-400 text-center">
+                  No pending alerts. Cloud database connected and synchronized.
                 </div>
-              </div>
+              )}
 
               <div className="p-3 rounded-2xl bg-slate-950/70 border border-slate-800/80 flex items-start gap-2.5">
                 <div className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 mt-0.5 font-bold text-[10px]">

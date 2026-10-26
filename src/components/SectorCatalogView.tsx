@@ -63,9 +63,9 @@ export const SectorCatalogView: React.FC<SectorCatalogViewProps> = ({
 
     if (!matchesSearch) return false;
     if (activeCategory === 'all') return true;
-    if (activeCategory === 'commerce' && (s.id === 'ecommerce' || s.id === 'restaurants')) return true;
-    if (activeCategory === 'services' && (s.id === 'clinics' || s.id === 'wellness' || s.id === 'legal')) return true;
-    if (activeCategory === 'enterprise' && (s.id === 'corporate' || s.id === 'real-estate' || s.id === 'schools')) return true;
+    if (activeCategory === 'websites' && (s.id === 'restaurants' || s.id === 'clinics')) return true;
+    if (activeCategory === 'ecommerce' && s.id === 'ecommerce') return true;
+    if (activeCategory === 'custom' && (s.id === 'corporate' || s.id === 'legal' || s.id === 'wellness')) return true;
     return true;
   });
 
@@ -76,11 +76,11 @@ export const SectorCatalogView: React.FC<SectorCatalogViewProps> = ({
         <div className="flex items-center gap-1.5 mb-1.5">
           <Zap className="w-4 h-4 text-cyan-400" />
           <span className="text-[10px] font-mono tracking-wider uppercase text-cyan-400 font-bold">
-            Sub-Second Mobile Architecture
+            Sub-Second Web Architecture
           </span>
         </div>
         <h2 className="text-lg font-black text-white tracking-tight leading-tight">
-          Hand-Coded Websites Built for Your Industry
+          Hand-Coded Websites by Webstudios.world
         </h2>
         <p className="text-xs text-slate-300 mt-1 leading-relaxed">
           Zero bloated WordPress or Wix plugins. Clean Next.js/React code with integrated booking engines, Daraja M-Pesa STK push, and global SSL hosting.
@@ -94,7 +94,7 @@ export const SectorCatalogView: React.FC<SectorCatalogViewProps> = ({
           </div>
           <div>
             <span className="text-xs font-black font-mono text-emerald-400">5-8 Days</span>
-            <span className="block text-[9px] text-slate-400 font-medium">Fast Build</span>
+            <span className="block text-[9px] text-slate-400 font-medium">Delivery</span>
           </div>
           <div>
             <span className="text-xs font-black font-mono text-purple-400">Fixed</span>
@@ -106,10 +106,10 @@ export const SectorCatalogView: React.FC<SectorCatalogViewProps> = ({
       {/* Filter Category Chips */}
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
         {[
-          { id: 'all', label: 'All 8 Sectors' },
-          { id: 'commerce', label: 'E-Commerce & Food' },
-          { id: 'services', label: 'Clinics & Wellness' },
-          { id: 'enterprise', label: 'Corporate & Real Estate' }
+          { id: 'all', label: 'All Packages' },
+          { id: 'websites', label: 'Websites' },
+          { id: 'ecommerce', label: 'E-Commerce' },
+          { id: 'custom', label: 'Custom & Support' }
         ].map((cat) => (
           <button
             key={cat.id}

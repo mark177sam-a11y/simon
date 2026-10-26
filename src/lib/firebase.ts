@@ -72,20 +72,19 @@ export function subscribeBookings(
     q,
     async (snapshot) => {
       if (snapshot.empty) {
-        // If Firestore is empty, auto-seed with INITIAL_BOOKINGS
-        try {
-          for (const b of INITIAL_BOOKINGS) {
-            await setDoc(doc(db, BOOKINGS_COLLECTION, b.id), b);
-          }
-        } catch (e) {
-          console.warn('Initial seeding fallback to memory:', e);
-          onSuccess(INITIAL_BOOKINGS);
-          return;
-        }
+        onSuccess([]);
+        return;
       }
 
       const items: BookingRecord[] = [];
       snapshot.forEach((docSnap) => {
+        // Exclude legacy mock seed bookings
+        if (docSnap.id === 'WS-BKG-84920' || docSnap.id === 'WS-BKG-91204') {
+          // Asynchronously purge from Firestore
+          deleteDoc(doc(db, BOOKINGS_COLLECTION, docSnap.id)).catch(() => {});
+          return;
+        }
+
         const data = docSnap.data() as BookingRecord;
         items.push({
           ...data,
