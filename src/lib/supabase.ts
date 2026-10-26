@@ -1,5 +1,5 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { BookingRecord } from '../types';
+import { createClient, SupabaseClient, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { BookingRecord, BookingStatus } from '../types';
 
 export interface SupabaseConfig {
   url: string;
@@ -9,13 +9,14 @@ export interface SupabaseConfig {
 
 const SUPABASE_STORAGE_KEY = 'webstudios_supabase_config_v1';
 
-// SQL statement to create the bookings table in Supabase
-export const SUPABASE_SETUP_SQL = `-- Run this in your Supabase SQL Editor:
+// SQL statement to create or update the bookings table in Supabase
+export const SUPABASE_SETUP_SQL = `-- Run this in your Supabase SQL Editor (SQL Editor -> New Query -> Run):
 CREATE TABLE IF NOT EXISTS public.bookings (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   booking_type TEXT NOT NULL,
   sector_id TEXT,
+  plan_name TEXT,
   client_name TEXT NOT NULL,
   client_email TEXT NOT NULL,
   client_phone TEXT,
@@ -30,18 +31,26 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   currency TEXT DEFAULT 'KSH',
   addons JSONB DEFAULT '[]'::jsonb,
   notes TEXT,
-  status TEXT DEFAULT 'confirmed',
+  status TEXT DEFAULT 'pending',
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  qr_code_token TEXT
+  qr_code_token TEXT,
+  mpesa_ref TEXT
 );
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 
 -- Allow public read and write access for bookings app
+DROP POLICY IF EXISTS "Allow public read bookings" ON public.bookings;
 CREATE POLICY "Allow public read bookings" ON public.bookings FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public insert bookings" ON public.bookings;
 CREATE POLICY "Allow public insert bookings" ON public.bookings FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public update bookings" ON public.bookings;
 CREATE POLICY "Allow public update bookings" ON public.bookings FOR UPDATE USING (true);
+
+DROP POLICY IF EXISTS "Allow public delete bookings" ON public.bookings;
 CREATE POLICY "Allow public delete bookings" ON public.bookings FOR DELETE USING (true);
 
 -- Enable Realtime for the bookings table
@@ -62,8 +71,8 @@ export function getSupabaseConfig(): SupabaseConfig {
       if (stored) {
         const parsed = JSON.parse(stored) as Partial<SupabaseConfig>;
         return {
-          url: parsed.url || envUrl,
-          anonKey: parsed.anonKey || envKey,
+          url: (parsed.url || envUrl).trim(),
+          anonKey: (parsed.anonKey || envKey).trim(),
           enabled: parsed.enabled !== false && Boolean(parsed.url || envUrl)
         };
       }
@@ -73,8 +82,8 @@ export function getSupabaseConfig(): SupabaseConfig {
   }
 
   return {
-    url: envUrl,
-    anonKey: envKey,
+    url: envUrl.trim(),
+    anonKey: envKey.trim(),
     enabled: Boolean(envUrl && envKey)
   };
 }
@@ -120,10 +129,11 @@ export function getSupabaseClient(): SupabaseClient | null {
 export function mapSupabaseToBooking(row: Record<string, unknown>): BookingRecord {
   return {
     id: String(row.id || ''),
-    title: String(row.title || 'Studio Consultation'),
-    bookingType: (row.booking_type || 'discovery') as BookingRecord['bookingType'],
+    title: String(row.title || 'Client Inquiry'),
+    bookingType: (row.booking_type || 'inquiry') as BookingRecord['bookingType'],
     sectorId: row.sector_id ? (row.sector_id as BookingRecord['sectorId']) : undefined,
-    clientName: String(row.client_name || ''),
+    planName: row.plan_name ? String(row.plan_name) : (row.title ? String(row.title) : undefined),
+    clientName: String(row.client_name || 'Client'),
     clientEmail: String(row.client_email || ''),
     clientPhone: String(row.client_phone || ''),
     clientCompany: row.client_company ? String(row.client_company) : undefined,
@@ -137,9 +147,10 @@ export function mapSupabaseToBooking(row: Record<string, unknown>): BookingRecor
     currency: (row.currency || 'KSH') as 'KSH' | 'USD',
     addons: Array.isArray(row.addons) ? (row.addons as string[]) : [],
     notes: row.notes ? String(row.notes) : undefined,
-    status: (row.status || 'confirmed') as BookingRecord['status'],
+    status: (row.status || 'pending') as BookingStatus,
     createdAt: String(row.created_at || new Date().toISOString()),
-    qrCodeToken: String(row.qr_code_token || row.id || '')
+    qrCodeToken: String(row.qr_code_token || row.id || ''),
+    mpesaRef: row.mpesa_ref ? String(row.mpesa_ref) : undefined
   };
 }
 
@@ -150,6 +161,7 @@ export function mapBookingToSupabase(booking: BookingRecord): Record<string, unk
     title: booking.title,
     booking_type: booking.bookingType,
     sector_id: booking.sectorId || null,
+    plan_name: booking.planName || booking.title || null,
     client_name: booking.clientName,
     client_email: booking.clientEmail,
     client_phone: booking.clientPhone || null,
@@ -166,7 +178,8 @@ export function mapBookingToSupabase(booking: BookingRecord): Record<string, unk
     notes: booking.notes || null,
     status: booking.status,
     created_at: booking.createdAt,
-    qr_code_token: booking.qrCodeToken
+    qr_code_token: booking.qrCodeToken,
+    mpesa_ref: booking.mpesaRef || null
   };
 }
 
@@ -191,11 +204,10 @@ export async function testSupabaseConnection(overrideUrl?: string, overrideKey?:
       .limit(1);
 
     if (error) {
-      // Check if table does not exist
       if (error.code === '42P01' || error.message.includes('relation "public.bookings" does not exist')) {
         return {
           success: true,
-          message: 'Connected to Supabase! (Note: The "bookings" table needs to be created using the SQL script).'
+          message: 'Connected to Supabase! The "bookings" table needs to be created in your Supabase SQL Editor.'
         };
       }
       return { success: false, message: `Supabase Error: ${error.message} (${error.code || 'unknown'})` };
@@ -264,8 +276,16 @@ export async function deleteBookingFromSupabase(bookingId: string): Promise<void
   }
 }
 
+export type RealtimeBookingEvent = {
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  record?: BookingRecord;
+  oldRecordId?: string;
+};
+
 // Subscribe to Supabase Realtime changes
-export function subscribeSupabaseBookings(onChange: () => void): (() => void) | null {
+export function subscribeSupabaseBookings(
+  onEvent: (event: RealtimeBookingEvent) => void
+): (() => void) | null {
   const client = getSupabaseClient();
   if (!client) return null;
 
@@ -275,8 +295,25 @@ export function subscribeSupabaseBookings(onChange: () => void): (() => void) | 
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
-        () => {
-          onChange();
+        (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
+          if (payload.eventType === 'INSERT' && payload.new) {
+            onEvent({
+              eventType: 'INSERT',
+              record: mapSupabaseToBooking(payload.new)
+            });
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            onEvent({
+              eventType: 'UPDATE',
+              record: mapSupabaseToBooking(payload.new)
+            });
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            onEvent({
+              eventType: 'DELETE',
+              oldRecordId: String(payload.old.id || '')
+            });
+          } else {
+            onEvent({ eventType: 'UPDATE' });
+          }
         }
       )
       .subscribe();
@@ -288,4 +325,61 @@ export function subscribeSupabaseBookings(onChange: () => void): (() => void) | 
     console.warn('Supabase realtime subscription failed:', err);
     return null;
   }
+}
+
+// Push a sample test booking directly to Supabase so the developer can test live notifications
+export async function sendTestBookingToSupabase(): Promise<BookingRecord> {
+  const plans = [
+    { title: 'E-Commerce Store + M-Pesa STK Push', ksh: 28500, usd: 220, sector: 'ecommerce' as const },
+    { title: 'Business & Lead Generation Package', ksh: 22000, usd: 170, sector: 'clinics' as const },
+    { title: 'Starter 5-Page Website Package', ksh: 13700, usd: 105, sector: 'restaurants' as const },
+    { title: 'Custom Web Application & Client Portal', ksh: 38000, usd: 295, sector: 'corporate' as const },
+    { title: 'WordPress to React Sub-Second Speed Redesign', ksh: 15000, usd: 115, sector: 'legal' as const }
+  ];
+
+  const randomPlan = plans[Math.floor(Math.random() * plans.length)];
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  const testId = `WS-SUPA-${randomNum}`;
+
+  const clientNames = [
+    { name: 'David Kamau', email: 'david.kamau@techkenya.co.ke', phone: '+254712345678', company: 'Kamau Logistics Ltd' },
+    { name: 'Amina Mohamed', email: 'amina@safarisun.com', phone: '+254722890123', company: 'Safari Sun Tours' },
+    { name: 'Brian Omondi', email: 'brian@omondilaw.co.ke', phone: '+254733456789', company: 'Omondi & Partners Advocates' },
+    { name: 'Faith Wanjiku', email: 'faith@nairobibakes.com', phone: '+254701234567', company: 'Nairobi Bakes Bakery' },
+    { name: 'Kipchumba Bett', email: 'bett@riftventures.com', phone: '+254715678901', company: 'Rift Agri Tech' }
+  ];
+  const client = clientNames[Math.floor(Math.random() * clientNames.length)];
+
+  const dateObj = new Date();
+  dateObj.setDate(dateObj.getDate() + Math.floor(1 + Math.random() * 5));
+  const dateStr = dateObj.toISOString().split('T')[0];
+
+  const testBooking: BookingRecord = {
+    id: testId,
+    title: randomPlan.title,
+    bookingType: 'package-booking',
+    sectorId: randomPlan.sector,
+    planName: randomPlan.title,
+    clientName: client.name,
+    clientEmail: client.email,
+    clientPhone: client.phone,
+    clientCompany: client.company,
+    date: dateStr,
+    timeSlot: '11:00 AM - 11:45 AM',
+    durationMinutes: 45,
+    meetingFormat: 'google-meet',
+    meetUrl: `https://meet.google.com/ws-${randomNum}`,
+    estimatedCostKSh: randomPlan.ksh,
+    estimatedCostUSD: randomPlan.usd,
+    currency: 'KSH',
+    addons: ['Daraja M-Pesa STK Push Express', 'Free .co.ke domain + SSL'],
+    notes: `Client selected the ${randomPlan.title} plan on webstudios.world inquiry form. Client requesting M-Pesa integration and sub-second load times.`,
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+    qrCodeToken: testId,
+    mpesaRef: `QHX${Math.floor(100000 + Math.random() * 900000)}`
+  };
+
+  await saveBookingToSupabase(testBooking);
+  return testBooking;
 }

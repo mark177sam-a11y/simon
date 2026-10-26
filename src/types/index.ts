@@ -28,19 +28,23 @@ export type BookingType =
   | 'discovery'
   | 'scoping'
   | 'kickoff'
-  | 'audit';
+  | 'audit'
+  | 'inquiry'
+  | 'package-booking';
 
-export interface BookingSlot {
-  time: string;
-  period: 'morning' | 'afternoon' | 'evening';
-  available: boolean;
-}
+export type BookingStatus = 
+  | 'pending'
+  | 'confirmed'
+  | 'in-progress'
+  | 'completed'
+  | 'cancelled';
 
 export interface BookingRecord {
   id: string;
   title: string;
   bookingType: BookingType;
   sectorId?: SectorId;
+  planName?: string;
   clientName: string;
   clientEmail: string;
   clientPhone: string;
@@ -55,9 +59,10 @@ export interface BookingRecord {
   currency: 'KSH' | 'USD';
   addons: string[];
   notes?: string;
-  status: 'confirmed' | 'in-progress' | 'completed' | 'cancelled';
+  status: BookingStatus;
   createdAt: string;
   qrCodeToken: string;
+  mpesaRef?: string;
 }
 
 export interface AddonOption {

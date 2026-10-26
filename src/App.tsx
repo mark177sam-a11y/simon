@@ -1,15 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { AndroidFrame, AndroidTheme } from './components/AndroidFrame';
+import React, { useState, useEffect, useRef } from 'react';
+import { AndroidFrame } from './components/AndroidFrame';
 import { AndroidTopBar } from './components/AndroidTopBar';
-import { AndroidBottomNav, NavTabId } from './components/AndroidBottomNav';
-import { SectorCatalogView } from './components/SectorCatalogView';
-import { QuoteBuilder } from './components/QuoteBuilder';
-import { MyBookingsView } from './components/MyBookingsView';
-import { DirectContactView } from './components/DirectContactView';
-import { BookingSheet } from './components/BookingSheet';
-import { DigitalPassModal } from './components/DigitalPassModal';
-import { SectorDetailModal } from './components/SectorDetailModal';
-import { PWAInstallBanner } from './components/PWAInstallBanner';
+import { AndroidBottomNav, DeveloperTabId } from './components/AndroidBottomNav';
+import { DeveloperDashboard } from './components/DeveloperDashboard';
+import { PipelineAnalyticsView } from './components/PipelineAnalyticsView';
+import { SupabaseSettingsView } from './components/SupabaseSettingsView';
+import { ManualIntakeModal } from './components/ManualIntakeModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { subscribeBookings, saveBooking, deleteBooking } from './lib/firebase.ts';
 import { 
@@ -18,40 +14,67 @@ import {
   saveBookingToSupabase, 
   deleteBookingFromSupabase, 
   fetchSupabaseBookings, 
-  subscribeSupabaseBookings 
+  subscribeSupabaseBookings,
+  sendTestBookingToSupabase,
+  RealtimeBookingEvent
 } from './lib/supabase';
-import { SupabaseModal } from './components/SupabaseModal';
-import { BookingRecord, SectorItem, SectorId } from './types';
-import { CalendarPlus } from 'lucide-react';
+import { BookingRecord, BookingStatus } from './types';
 import { triggerHaptic } from './utils/calendar';
 
-import { BookingManagerModal } from './components/BookingManagerModal';
-import { SectorDemoModal } from './components/SectorDemoModal';
-import { MpesaModal } from './components/MpesaModal';
-
-const STORAGE_KEY = 'webstudios_mobile_bookings_v1';
-const THEME_KEY = 'webstudios_android_theme_v1';
+const STORAGE_KEY = 'webstudios_mobile_bookings_v2';
 const CURRENCY_KEY = 'webstudios_currency_v1';
+const SOUND_KEY = 'webstudios_sound_enabled_v1';
+
+// Web Audio API synthesizer for instant booking arrival chime
+function playNotificationChime() {
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5 note
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12); // A5 note
+
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.4);
+  } catch {
+    // Audio context may require prior user interaction
+  }
+}
 
 export default function App() {
-  // Navigation tab state
-  const [activeTab, setActiveTab] = useState<NavTabId>('sectors');
-  
-  // Theme & Currency
-  const [activeTheme, setActiveTheme] = useState<AndroidTheme>('cyan');
+  // Navigation: Feed (Bookings), Analytics (Pipeline), Supabase (Database)
+  const [activeTab, setActiveTab] = useState<DeveloperTabId>('feed');
   const [currency, setCurrency] = useState<'KSH' | 'USD'>('KSH');
-  
-  // Search query in TopBar
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(SOUND_KEY);
+      return saved !== 'false';
+    }
+    return true;
+  });
 
-  // Supabase state
-  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
+  // Supabase connection state
   const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(() => {
     const cfg = getSupabaseConfig();
     return Boolean(cfg.url && cfg.anonKey && cfg.enabled !== false);
   });
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
-  // Bookings list state - Clean and connected directly to Firestore & Supabase
+  // Latest incoming booking for top push alert
+  const [latestIncomingBooking, setLatestIncomingBooking] = useState<BookingRecord | null>(null);
+
+  // Bookings list state - purely user & client data, no mock clutter
   const [bookings, setBookings] = useState<BookingRecord[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -59,7 +82,7 @@ export default function App() {
         try {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) {
-            // Strip out any legacy test dummy bookings
+            // Strip any legacy dummy IDs
             return parsed.filter((b: BookingRecord) => b.id !== 'WS-BKG-84920' && b.id !== 'WS-BKG-91204');
           }
         } catch {
@@ -70,23 +93,50 @@ export default function App() {
     return [];
   });
 
-  // Real-time Firestore sync
+  // Load preferences
+  useEffect(() => {
+    try {
+      const savedCurrency = localStorage.getItem(CURRENCY_KEY) as 'KSH' | 'USD';
+      if (savedCurrency) setCurrency(savedCurrency);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleCurrencyToggle = () => {
+    triggerHaptic();
+    const next = currency === 'KSH' ? 'USD' : 'KSH';
+    setCurrency(next);
+    localStorage.setItem(CURRENCY_KEY, next);
+  };
+
+  const handleToggleSound = () => {
+    triggerHaptic();
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    localStorage.setItem(SOUND_KEY, String(next));
+  };
+
+  // Save to localStorage as cache
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookings));
+    } catch {
+      // ignore
+    }
+  }, [bookings]);
+
+  // Real-time Firestore Sync
   useEffect(() => {
     const unsubscribeFirestore = subscribeBookings(
       (cloudBookings) => {
         setBookings((prev) => {
-          // Merge avoiding duplicates
           const map = new Map<string, BookingRecord>();
           prev.forEach((b) => map.set(b.id, b));
           cloudBookings.forEach((b) => map.set(b.id, b));
           const merged = Array.from(map.values()).sort(
             (a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime()
           );
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-          } catch {
-            // ignore
-          }
           return merged;
         });
       },
@@ -98,7 +148,7 @@ export default function App() {
     return () => unsubscribeFirestore();
   }, []);
 
-  // Real-time Supabase sync (if configured)
+  // Real-time Supabase Sync & Push Notification Listener
   useEffect(() => {
     const config = getSupabaseConfig();
     const hasConfig = Boolean(config.url && config.anonKey && config.enabled !== false);
@@ -106,7 +156,7 @@ export default function App() {
 
     if (!hasConfig) return;
 
-    // Initial fetch from Supabase
+    // Initial load from Supabase
     fetchSupabaseBookings()
       .then((supaBookings) => {
         if (supaBookings.length > 0) {
@@ -114,15 +164,9 @@ export default function App() {
             const map = new Map<string, BookingRecord>();
             prev.forEach((b) => map.set(b.id, b));
             supaBookings.forEach((b) => map.set(b.id, b));
-            const merged = Array.from(map.values()).sort(
+            return Array.from(map.values()).sort(
               (a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime()
             );
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-            } catch {
-              // ignore
-            }
-            return merged;
           });
         }
       })
@@ -130,367 +174,211 @@ export default function App() {
         console.warn('Initial Supabase fetch deferred:', err);
       });
 
-    // Realtime channel listener
-    const unsubscribeSupabase = subscribeSupabaseBookings(() => {
-      fetchSupabaseBookings()
-        .then((fresh) => {
-          setBookings(fresh);
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
-          } catch {
-            // ignore
-          }
-        })
-        .catch(() => {});
+    // Realtime channel listener for push events
+    const unsubscribeSupabase = subscribeSupabaseBookings((event: RealtimeBookingEvent) => {
+      if (event.eventType === 'INSERT' && event.record) {
+        const incoming = event.record;
+        // Trigger notification
+        if (soundEnabled) {
+          playNotificationChime();
+        }
+        triggerHaptic();
+        setLatestIncomingBooking(incoming);
+
+        // Add to state
+        setBookings((prev) => {
+          const exists = prev.some((b) => b.id === incoming.id);
+          if (exists) return prev;
+          return [incoming, ...prev];
+        });
+      } else if (event.eventType === 'DELETE' && event.oldRecordId) {
+        setBookings((prev) => prev.filter((b) => b.id !== event.oldRecordId));
+      } else {
+        // Full refresh on update
+        fetchSupabaseBookings()
+          .then((fresh) => {
+            if (fresh.length > 0) {
+              setBookings(fresh);
+            }
+          })
+          .catch(() => {});
+      }
     });
 
     return () => {
       if (unsubscribeSupabase) unsubscribeSupabase();
     };
-  }, [isSupabaseConnected]);
+  }, [isSupabaseConnected, soundEnabled]);
 
-  // Save bookings to localStorage as local cache
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookings));
-    } catch {
-      // ignore
-    }
-  }, [bookings]);
-
-  // Load saved theme and currency
-  useEffect(() => {
-    try {
-      const savedTheme = localStorage.getItem(THEME_KEY) as AndroidTheme;
-      if (savedTheme) setActiveTheme(savedTheme);
-      const savedCurrency = localStorage.getItem(CURRENCY_KEY) as 'KSH' | 'USD';
-      if (savedCurrency) setCurrency(savedCurrency);
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const handleThemeChange = (theme: AndroidTheme) => {
+  // Status updates
+  const handleUpdateStatus = async (bookingId: string, status: BookingStatus) => {
     triggerHaptic();
-    setActiveTheme(theme);
-    localStorage.setItem(THEME_KEY, theme);
-  };
+    const updated = bookings.find((b) => b.id === bookingId);
+    if (!updated) return;
 
-  const handleCurrencyToggle = () => {
-    triggerHaptic();
-    const next = currency === 'KSH' ? 'USD' : 'KSH';
-    setCurrency(next);
-    localStorage.setItem(CURRENCY_KEY, next);
-  };
+    const newRecord: BookingRecord = { ...updated, status };
+    setBookings((prev) => prev.map((b) => (b.id === bookingId ? newRecord : b)));
 
-  // Modals state
-  const [isBookingSheetOpen, setIsBookingSheetOpen] = useState<boolean>(false);
-  const [isManagerOpen, setIsManagerOpen] = useState<boolean>(false);
-  const [preselectedSectorId, setPreselectedSectorId] = useState<SectorId | undefined>(undefined);
-  const [viewingPass, setViewingPass] = useState<BookingRecord | null>(null);
-  const [viewingSector, setViewingSector] = useState<SectorItem | null>(null);
-  const [demoSector, setDemoSector] = useState<SectorItem | null>(null);
-  const [mpesaPayment, setMpesaPayment] = useState<{ isOpen: boolean; phone: string; amountKSh: number; bookingRef: string }>({
-    isOpen: false,
-    phone: '',
-    amountKSh: 0,
-    bookingRef: ''
-  });
-
-  // Booking handlers with persistent dual-sync (Supabase & Firestore)
-  const handleBookingCreated = async (newBooking: BookingRecord) => {
-    setBookings((prev) => [newBooking, ...prev]);
-
-    // Persist to Supabase if configured
+    // Sync to Supabase
     if (getSupabaseClient()) {
-      saveBookingToSupabase(newBooking).catch((err) => {
-        console.warn('Supabase save deferred:', err);
+      saveBookingToSupabase(newRecord).catch((err) => {
+        console.warn('Supabase status update error:', err);
       });
     }
 
-    // Persist to Firestore
+    // Sync to Firestore
     try {
-      await saveBooking(newBooking);
+      await saveBooking(newRecord);
     } catch (e) {
-      console.warn('Firestore save deferred to local storage:', e);
+      console.warn('Firestore status update error:', e);
     }
   };
 
-  const handleCancelBooking = async (bookingId: string) => {
+  // Delete booking
+  const handleDeleteBooking = async (bookingId: string) => {
     triggerHaptic();
     setBookings((prev) => prev.filter((b) => b.id !== bookingId));
 
-    // Delete from Supabase if configured
     if (getSupabaseClient()) {
       deleteBookingFromSupabase(bookingId).catch((err) => {
-        console.warn('Supabase delete deferred:', err);
+        console.warn('Supabase delete error:', err);
       });
     }
 
-    // Delete from Firestore
     try {
       await deleteBooking(bookingId);
     } catch (e) {
-      console.warn('Firestore delete deferred to local storage:', e);
+      console.warn('Firestore delete error:', e);
     }
   };
 
-  const handleRescheduleBooking = async (bookingId: string, newDate: string, newTime: string) => {
-    triggerHaptic();
-    const updated = bookings.find((b) => b.id === bookingId);
-    if (updated) {
-      const newRecord = { ...updated, date: newDate, timeSlot: newTime };
-      setBookings((prev) =>
-        prev.map((b) => (b.id === bookingId ? newRecord : b))
-      );
+  // Manual entry save
+  const handleSaveManualBooking = async (booking: BookingRecord) => {
+    setBookings((prev) => [booking, ...prev]);
 
-      if (getSupabaseClient()) {
-        saveBookingToSupabase(newRecord).catch((err) => {
-          console.warn('Supabase update deferred:', err);
-        });
-      }
+    if (getSupabaseClient()) {
+      saveBookingToSupabase(booking).catch((err) => {
+        console.warn('Supabase save error:', err);
+      });
+    }
 
-      try {
-        await saveBooking(newRecord);
-      } catch (e) {
-        console.warn('Firestore update deferred to local storage:', e);
-      }
+    try {
+      await saveBooking(booking);
+    } catch (e) {
+      console.warn('Firestore save error:', e);
     }
   };
 
-  const handleUpdateStatus = async (bookingId: string, status: BookingRecord['status']) => {
-    triggerHaptic();
-    const updated = bookings.find((b) => b.id === bookingId);
-    if (updated) {
-      const newRecord = { ...updated, status };
-      setBookings((prev) =>
-        prev.map((b) => (b.id === bookingId ? newRecord : b))
-      );
-
-      if (getSupabaseClient()) {
-        saveBookingToSupabase(newRecord).catch((err) => {
-          console.warn('Supabase status update deferred:', err);
-        });
+  // Send sample test booking via Supabase
+  const handleSendTestBooking = async () => {
+    try {
+      const testRecord = await sendTestBookingToSupabase();
+      if (soundEnabled) {
+        playNotificationChime();
       }
-
-      try {
-        await saveBooking(newRecord);
-      } catch (e) {
-        console.warn('Firestore status update deferred to local storage:', e);
-      }
+      setLatestIncomingBooking(testRecord);
+      setBookings((prev) => {
+        const exists = prev.some((b) => b.id === testRecord.id);
+        if (exists) return prev;
+        return [testRecord, ...prev];
+      });
+    } catch (err) {
+      console.error('Failed to send test booking to Supabase:', err);
+      alert('Could not push to Supabase. Please verify your Supabase URL & Anon Key in the Supabase tab.');
     }
   };
 
-  // Open booking sheet for a specific sector
-  const handleBookSector = (sector: SectorItem) => {
-    triggerHaptic();
-    setPreselectedSectorId(sector.id);
-    setIsBookingSheetOpen(true);
-  };
-
-  // From QuoteBuilder
-  const handleBookConfiguredProject = (sectorId: SectorId) => {
-    triggerHaptic();
-    setPreselectedSectorId(sectorId);
-    setIsBookingSheetOpen(true);
-  };
+  const pendingCount = bookings.filter((b) => b.status === 'pending').length;
 
   return (
     <AndroidFrame
-      activeTheme={activeTheme}
-      onThemeChange={handleThemeChange}
-      onNavigateHome={() => setActiveTab('sectors')}
-      onNavigateBack={() => setActiveTab('sectors')}
+      activeTheme="cyan"
+      onThemeChange={() => {}}
+      onNavigateHome={() => setActiveTab('feed')}
+      onNavigateBack={() => setActiveTab('feed')}
     >
       <OfflineIndicator />
 
-      {/* Top Header App Bar with Supabase indicator */}
+      {/* Top Header App Bar tailored for Developer */}
       <AndroidTopBar
         currency={currency}
         onCurrencyToggle={handleCurrencyToggle}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        bookingCount={bookings.filter((b) => b.status === 'confirmed').length}
-        onOpenMyBookings={() => setActiveTab('bookings')}
-        activeTheme={activeTheme}
+        bookingCount={bookings.length}
+        pendingCount={pendingCount}
         isSupabaseConnected={isSupabaseConnected}
-        onOpenSupabase={() => setIsSupabaseModalOpen(true)}
+        onOpenSupabase={() => setActiveTab('supabase')}
+        onOpenManualEntry={() => setIsManualModalOpen(true)}
       />
 
-      {/* In-App PWA Install Banner */}
-      <PWAInstallBanner />
-
-      {/* Main Tab Views */}
+      {/* Main View Area */}
       <main className="flex-1">
-        {activeTab === 'sectors' && (
-          <SectorCatalogView
-            onSelectSector={(sector) => {
-              triggerHaptic();
-              setViewingSector(sector);
-            }}
-            onBookSector={handleBookSector}
-            onOpenDemo={(sector) => {
-              triggerHaptic();
-              setDemoSector(sector);
-            }}
-            currency={currency}
-            searchQuery={searchQuery}
-            activeTheme={activeTheme}
-          />
-        )}
-
-        {activeTab === 'quote' && (
-          <QuoteBuilder
-            currency={currency}
-            onBookConfiguredProject={handleBookConfiguredProject}
-            activeTheme={activeTheme}
-          />
-        )}
-
-        {activeTab === 'book' && (
-          <div className="p-4 space-y-4 animate-fade-in text-center py-8">
-            <div className="w-16 h-16 rounded-3xl bg-cyan-500/20 text-cyan-400 mx-auto flex items-center justify-center shadow-lg">
-              <CalendarPlus className="w-8 h-8" />
-            </div>
-            <h2 className="text-lg font-bold text-white">Book Webstudios Studio</h2>
-            <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-              Schedule your free 30-minute discovery call, technical scoping session, or reserve your 5-day build slot.
-            </p>
-            <button
-              onClick={() => {
-                triggerHaptic();
-                setPreselectedSectorId(undefined);
-                setIsBookingSheetOpen(true);
-              }}
-              className="px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-950/50 active:scale-95 transition-transform inline-flex items-center gap-2"
-            >
-              <span>Launch Booking Wizard</span>
-              <CalendarPlus className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
-        {activeTab === 'bookings' && (
-          <MyBookingsView
+        {activeTab === 'feed' && (
+          <DeveloperDashboard
             bookings={bookings}
-            onOpenPass={(booking) => {
-              triggerHaptic();
-              setViewingPass(booking);
-            }}
-            onOpenNewBooking={() => {
-              triggerHaptic();
-              setIsBookingSheetOpen(true);
-            }}
-            onOpenManager={() => {
-              triggerHaptic();
-              setIsManagerOpen(true);
-            }}
-            currency={currency}
+            onUpdateStatus={handleUpdateStatus}
+            onDeleteBooking={handleDeleteBooking}
+            onOpenSupabase={() => setActiveTab('supabase')}
+            onOpenManualEntry={() => setIsManualModalOpen(true)}
+            onSendTestBooking={handleSendTestBooking}
             isSupabaseConnected={isSupabaseConnected}
-            onOpenSupabase={() => setIsSupabaseModalOpen(true)}
+            currency={currency}
+            latestIncomingBooking={latestIncomingBooking}
+            onDismissIncomingAlert={() => setLatestIncomingBooking(null)}
+            soundEnabled={soundEnabled}
+            onToggleSound={handleToggleSound}
           />
         )}
 
-        {activeTab === 'contact' && <DirectContactView />}
+        {activeTab === 'analytics' && (
+          <PipelineAnalyticsView
+            bookings={bookings}
+            currency={currency}
+          />
+        )}
+
+        {activeTab === 'supabase' && (
+          <SupabaseSettingsView
+            bookings={bookings}
+            onBookingsSynced={(synced) => setBookings(synced)}
+            onSendTestBooking={handleSendTestBooking}
+          />
+        )}
       </main>
 
-      {/* Floating Action Button (FAB) for fast booking trigger */}
-      {activeTab !== 'book' && (
-        <button
-          onClick={() => {
-            triggerHaptic();
-            setPreselectedSectorId(undefined);
-            setIsBookingSheetOpen(true);
-          }}
-          className="fixed bottom-16 right-4 z-40 px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-xl shadow-cyan-950/60 hover:opacity-95 active:scale-95 transition-all"
-          aria-label="Quick Book Session"
-        >
-          <CalendarPlus className="w-4 h-4 stroke-[2.5]" />
-          <span>Book Session</span>
-        </button>
-      )}
-
-      {/* Android Material 3 Bottom Navigation Bar */}
+      {/* Developer Bottom Navigation Bar */}
       <AndroidBottomNav
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        bookingCount={bookings.filter((b) => b.status === 'confirmed').length}
-        activeTheme={activeTheme}
+        pendingCount={pendingCount}
+        totalCount={bookings.length}
       />
 
-      {/* Modals & Bottom Sheets */}
-      <BookingSheet
-        isOpen={isBookingSheetOpen}
-        onClose={() => setIsBookingSheetOpen(false)}
-        preselectedSectorId={preselectedSectorId}
-        currency={currency}
-        onBookingCreated={handleBookingCreated}
-        activeTheme={activeTheme}
-      />
-
-      <DigitalPassModal
-        booking={viewingPass}
-        onClose={() => setViewingPass(null)}
-        onCancelBooking={handleCancelBooking}
-        onRescheduleBooking={handleRescheduleBooking}
+      {/* Manual Intake Modal */}
+      <ManualIntakeModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
+        onSave={handleSaveManualBooking}
         currency={currency}
       />
 
-      <SectorDetailModal
-        sector={viewingSector}
-        onClose={() => setViewingSector(null)}
-        onBookThisSector={handleBookSector}
-        currency={currency}
-      />
-
-      <BookingManagerModal
-        isOpen={isManagerOpen}
-        onClose={() => setIsManagerOpen(false)}
-        bookings={bookings}
-        onUpdateStatus={handleUpdateStatus}
-        onDeleteBooking={handleCancelBooking}
-        currency={currency}
-        isSupabaseConnected={isSupabaseConnected}
-        onOpenSupabase={() => setIsSupabaseModalOpen(true)}
-      />
-
-      <SectorDemoModal
-        sector={demoSector}
-        onClose={() => setDemoSector(null)}
-        onBookThisSector={handleBookSector}
-        currency={currency}
-      />
-
-      <SupabaseModal
-        isOpen={isSupabaseModalOpen}
-        onClose={() => {
-          setIsSupabaseModalOpen(false);
-          const cfg = getSupabaseConfig();
-          setIsSupabaseConnected(Boolean(cfg.url && cfg.anonKey && cfg.enabled !== false));
-        }}
-        bookings={bookings}
-        onBookingsSynced={(syncedBookings) => {
-          setBookings(syncedBookings);
-        }}
-      />
-
-      <MpesaModal
-        isOpen={mpesaPayment.isOpen}
-        onClose={() => setMpesaPayment((prev) => ({ ...prev, isOpen: false }))}
-        phone={mpesaPayment.phone}
-        amountKSh={mpesaPayment.amountKSh}
-        bookingRef={mpesaPayment.bookingRef}
-        onPaymentSuccess={async (receipt) => {
-          const matched = bookings.find((b) => b.id === mpesaPayment.bookingRef);
-          if (matched) {
-            const updated = { ...matched, notes: `${matched.notes || ''} [M-Pesa Paid Ref: ${receipt}]` };
-            await saveBooking(updated);
-            if (getSupabaseClient()) {
-              saveBookingToSupabase(updated).catch(() => {});
-            }
-          }
-        }}
-      />
+      {/* Supabase Config Modal (if triggered from top bar when on other tabs) */}
+      {isSupabaseModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl max-h-[90vh] overflow-y-auto no-scrollbar">
+            <SupabaseSettingsView
+              bookings={bookings}
+              onBookingsSynced={(synced) => setBookings(synced)}
+              onSendTestBooking={handleSendTestBooking}
+              isModal={true}
+              onClose={() => {
+                setIsSupabaseModalOpen(false);
+                const cfg = getSupabaseConfig();
+                setIsSupabaseConnected(Boolean(cfg.url && cfg.anonKey && cfg.enabled !== false));
+              }}
+            />
+          </div>
+        </div>
+      )}
     </AndroidFrame>
   );
 }

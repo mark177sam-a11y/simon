@@ -1,69 +1,44 @@
 import React from 'react';
-import { LayoutGrid, Sliders, CalendarPlus, Ticket, MessageCircle } from 'lucide-react';
-import { AndroidTheme } from './AndroidFrame';
+import { Inbox, BarChart3, Database, Bell } from 'lucide-react';
 import { triggerHaptic } from '../utils/calendar';
 
-export type NavTabId = 'sectors' | 'quote' | 'book' | 'bookings' | 'contact';
+export type DeveloperTabId = 'feed' | 'analytics' | 'supabase';
 
 interface AndroidBottomNavProps {
-  activeTab: NavTabId;
-  onTabChange: (tab: NavTabId) => void;
-  bookingCount: number;
-  activeTheme: AndroidTheme;
+  activeTab: DeveloperTabId;
+  onTabChange: (tab: DeveloperTabId) => void;
+  pendingCount: number;
+  totalCount: number;
 }
 
 export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({
   activeTab,
   onTabChange,
-  bookingCount,
-  activeTheme
+  pendingCount,
+  totalCount
 }) => {
-  const tabs = [
+  const tabs: { id: DeveloperTabId; label: string; icon: typeof Inbox; badge?: number }[] = [
     {
-      id: 'sectors' as NavTabId,
-      label: 'Packages',
-      icon: LayoutGrid,
+      id: 'feed',
+      label: 'Bookings Feed',
+      icon: Inbox,
+      badge: pendingCount > 0 ? pendingCount : undefined
     },
     {
-      id: 'quote' as NavTabId,
-      label: 'Calculator',
-      icon: Sliders,
+      id: 'analytics',
+      label: 'Pipeline & Stats',
+      icon: BarChart3
     },
     {
-      id: 'book' as NavTabId,
-      label: 'Book Now',
-      icon: CalendarPlus,
-      highlight: true
-    },
-    {
-      id: 'bookings' as NavTabId,
-      label: 'Bookings',
-      icon: Ticket,
-      badge: bookingCount
-    },
-    {
-      id: 'contact' as NavTabId,
-      label: 'Contact',
-      icon: MessageCircle,
-    },
+      id: 'supabase',
+      label: 'Supabase DB',
+      icon: Database
+    }
   ];
 
-  const themeAccentHex: Record<AndroidTheme, string> = {
-    cyan: '#06b6d4',
-    emerald: '#10b981',
-    violet: '#a855f7',
-    amber: '#f59e0b',
-    slate: '#38bdf8'
-  };
-
-  const handleSelect = (tabId: NavTabId) => {
-    triggerHaptic();
-    onTabChange(tabId);
-  };
-
   return (
-    <nav className="sticky bottom-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-900/80 px-2 py-1 select-none">
-      <div className="grid grid-cols-5 items-center h-14">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-lg border-t border-slate-900 px-3 py-1.5 max-w-xl mx-auto">
+      <div className="flex items-center justify-around">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -71,55 +46,27 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({
           return (
             <button
               key={tab.id}
-              onClick={() => handleSelect(tab.id)}
-              className="group relative flex flex-col items-center justify-center h-full min-h-[48px] py-1 transition-all"
+              onClick={() => {
+                triggerHaptic();
+                onTabChange(tab.id);
+              }}
+              className={`flex-1 flex flex-col items-center justify-center py-1.5 px-2 rounded-2xl relative transition-all ${
+                isActive ? 'text-cyan-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
             >
-              {/* Material You Active Pill Indicator */}
               <div
-                className={`flex items-center justify-center transition-all duration-200 ${
-                  isActive
-                    ? 'w-14 h-7 rounded-full shadow-sm'
-                    : 'w-10 h-7 rounded-full group-hover:bg-slate-900'
+                className={`relative px-4 py-1 rounded-full transition-all ${
+                  isActive ? 'bg-cyan-500/15' : 'bg-transparent'
                 }`}
-                style={{
-                  backgroundColor: isActive
-                    ? `${themeAccentHex[activeTheme]}25`
-                    : 'transparent'
-                }}
               >
-                <div className="relative">
-                  <Icon
-                    className={`w-5 h-5 transition-transform ${
-                      isActive ? 'scale-110' : 'scale-100 text-slate-400 group-hover:text-slate-200'
-                    }`}
-                    style={{
-                      color: isActive ? themeAccentHex[activeTheme] : undefined
-                    }}
-                  />
-                  {tab.badge && tab.badge > 0 ? (
-                    <span 
-                      className="absolute -top-1.5 -right-2 px-1 py-0.2 rounded-full text-[9px] font-bold text-slate-950 flex items-center justify-center min-w-[14px] h-[14px]"
-                      style={{ backgroundColor: themeAccentHex[activeTheme] }}
-                    >
-                      {tab.badge}
-                    </span>
-                  ) : null}
-                </div>
+                <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
+                {tab.badge !== undefined && tab.badge > 0 && (
+                  <span className="absolute -top-1 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-slate-950 font-black text-[10px] flex items-center justify-center shadow-md animate-pulse">
+                    {tab.badge}
+                  </span>
+                )}
               </div>
-
-              {/* Tab Label */}
-              <span
-                className={`text-[10px] font-medium tracking-tight mt-0.5 transition-colors ${
-                  isActive
-                    ? 'font-bold text-white'
-                    : 'text-slate-400 group-hover:text-slate-300'
-                }`}
-                style={{
-                  color: isActive ? themeAccentHex[activeTheme] : undefined
-                }}
-              >
-                {tab.label}
-              </span>
+              <span className="text-[11px] mt-0.5 tracking-tight">{tab.label}</span>
             </button>
           );
         })}
