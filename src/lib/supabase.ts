@@ -62,8 +62,10 @@ let currentConfigString = '';
 
 // Get config from localStorage or Vite environment variables
 export function getSupabaseConfig(): SupabaseConfig {
-  const envUrl = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SUPABASE_URL || '';
-  const envKey = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SUPABASE_ANON_KEY || '';
+  const defaultUrl = 'https://tjwqmatjleopbcqgkgld.supabase.co';
+  const defaultKey = 'sb_publishable_OnZHtSDxdeB6NMoY67stQw_InYxoLoz';
+  const envUrl = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SUPABASE_URL || defaultUrl;
+  const envKey = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SUPABASE_ANON_KEY || defaultKey;
 
   if (typeof window !== 'undefined') {
     try {

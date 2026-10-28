@@ -6,6 +6,7 @@ import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
+    base: '/simon/',
     plugins: [
       react(),
       tailwindcss(),
@@ -13,24 +14,24 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         includeAssets: ['icon.svg'],
         manifest: {
-          id: '/',
+          id: '/simon/',
           name: 'Webstudios Mobile',
           short_name: 'Webstudios',
           description: 'Official Android app for webstudios.world: book custom websites, discovery calls, and manage builds.',
           theme_color: '#0f172a',
           background_color: '#020617',
           display: 'standalone',
-          start_url: '/',
-          scope: '/',
+          start_url: '/simon/',
+          scope: '/simon/',
           icons: [
             {
-              src: '/icon.svg',
+              src: '/simon/icon.svg',
               sizes: '192x192',
               type: 'image/svg+xml',
               purpose: 'any',
             },
             {
-              src: '/icon.svg',
+              src: '/simon/icon.svg',
               sizes: '512x512',
               type: 'image/svg+xml',
               purpose: 'any',
@@ -49,10 +50,7 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };
