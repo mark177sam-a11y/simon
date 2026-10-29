@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { BookingRecord, BookingStatus } from '../types';
 import { triggerHaptic } from '../utils/calendar';
+import { getNotificationPermission, requestNotificationPermission, postSystemNotification } from '../utils/notifications';
 
 interface DeveloperDashboardProps {
   bookings: BookingRecord[];
@@ -65,6 +66,22 @@ export const DeveloperDashboard: React.FC<DeveloperDashboardProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | BookingStatus>('all');
   const [selectedBooking, setSelectedBooking] = useState<BookingRecord | null>(null);
   const [isSendingTest, setIsSendingTest] = useState(false);
+  const [notifStatus, setNotifStatus] = useState<NotificationPermission>(() => getNotificationPermission());
+
+  const handleEnableNotifications = async () => {
+    triggerHaptic();
+    const granted = await requestNotificationPermission();
+    setNotifStatus(granted ? 'granted' : 'denied');
+  };
+
+  const handleTriggerTestNotification = async () => {
+    triggerHaptic();
+    await postSystemNotification({
+      title: '🔔 Webstudios Pop-up Alert Test',
+      body: 'Monica Wambui • Pop-up notifications are active and working on your phone!',
+      tag: 'test-popup',
+    });
+  };
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Status counts
@@ -121,6 +138,11 @@ export const DeveloperDashboard: React.FC<DeveloperDashboardProps> = ({
     setIsSendingTest(true);
     try {
       await onSendTestBooking();
+      await postSystemNotification({
+        title: '⚡ Test Alert: Client Booking Received',
+        body: 'Monica Wambui • Custom Website Scoping (KSh 15,000)',
+        tag: 'test-booking',
+      });
     } finally {
       setIsSendingTest(false);
     }
@@ -300,6 +322,40 @@ export const DeveloperDashboard: React.FC<DeveloperDashboardProps> = ({
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Record Intake</span>
           </button>
+        </div>
+      </div>
+
+      {/* System Pop-up Alert Banner */}
+      <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-cyan-950/40 border border-cyan-500/30 shadow-sm">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center shrink-0 text-cyan-400">
+            <Bell className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-white truncate">Android Pop-Up Notifications</p>
+            <p className="text-[11px] text-slate-400 truncate">
+              {notifStatus === 'granted'
+                ? 'Active • Alerts will pop up on your phone when new bookings arrive'
+                : 'Click Enable to allow Android lock-screen & status bar pop-up alerts'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {notifStatus === 'granted' ? (
+            <button
+              onClick={handleTriggerTestNotification}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-cyan-500/30 text-xs font-semibold transition-colors"
+            >
+              Test Pop-up
+            </button>
+          ) : (
+            <button
+              onClick={handleEnableNotifications}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 text-xs font-bold shadow-md shadow-cyan-950/40 active:scale-95 transition-all"
+            >
+              Enable
+            </button>
+          )}
         </div>
       </div>
 

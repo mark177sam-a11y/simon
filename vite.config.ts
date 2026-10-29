@@ -12,7 +12,10 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg'],
+        includeAssets: ['icon.svg', 'custom-sw.js'],
+        workbox: {
+          importScripts: ['custom-sw.js'],
+        },
         manifest: {
           id: '/simon/',
           name: 'Webstudios Mobile',

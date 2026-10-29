@@ -20,6 +20,7 @@ import {
 } from './lib/supabase';
 import { BookingRecord, BookingStatus } from './types';
 import { triggerHaptic } from './utils/calendar';
+import { postSystemNotification } from './utils/notifications';
 
 const STORAGE_KEY = 'webstudios_mobile_bookings_v2';
 const CURRENCY_KEY = 'webstudios_currency_v1';
@@ -183,6 +184,12 @@ export default function App() {
           playNotificationChime();
         }
         triggerHaptic();
+        postSystemNotification({
+          title: "🎉 New Client: " + (incoming.clientName || "Inquiry Received"),
+          body: (incoming.sectorName || incoming.planName || "General Inquiry") + " • " + (incoming.title || incoming.notes || "Tap to view details"),
+          tag: "booking-" + incoming.id,
+          data: { url: "/simon/", id: incoming.id }
+        });
         setLatestIncomingBooking(incoming);
 
         // Add to state
